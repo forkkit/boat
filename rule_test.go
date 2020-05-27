@@ -7,13 +7,23 @@ import (
 
 func TestInvalidRules(t *testing.T) {
 	cases := []string{
+		`"hello" ++`,
+		`123 + "hello world"`,
+		`"test" - 3`,
+		`"test" / 3`,
+		`>="test"`,
+		`123 -+ 4`,
 		`"hello world`,
 		`0xfg`,
 	}
 
 	for _, test := range cases {
-		_, err := ParseRule(test)
-		require.Error(t, err, test)
+		px, err := ParseRule(test)
+		if err != nil {
+			continue
+		}
+		_, err = px.Eval("invalid")
+		require.Error(t, err)
 	}
 }
 

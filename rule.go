@@ -157,34 +157,7 @@ func (e *Rule) Eval(input string) (bool, error) {
 		return false, fmt.Errorf("got %d values from evaluating the rule: expected only one", len(e.vals))
 	}
 
-	return e.EvalNode(in, e.vals[0]), nil
-}
-
-func (e *Rule) EvalNode(in, n Node) bool {
-	switch n.Type {
-	case nodeInt:
-		switch in.Type {
-		case nodeInt:
-			return in.Int == n.Int
-		case nodeFloat:
-			return in.Float == float64(n.Int)
-		default:
-			return false
-		}
-	case nodeFloat:
-		switch in.Type {
-		case nodeFloat:
-			return in.Float == n.Float
-		case nodeInt:
-			return float64(in.Int) == n.Float
-		default:
-			return false
-		}
-	case nodeText:
-		return in.Type == nodeText && in.Text == n.Text
-	default:
-		return n.Bool
-	}
+	return EvalNode(in, e.vals[0]), nil
 }
 
 func (e *Rule) EvalOP(in Node, op Token) error {
@@ -192,6 +165,9 @@ func (e *Rule) EvalOP(in Node, op Token) error {
 
 	switch op.Type {
 	case tokNegate:
+		if len(e.vals) < 1 {
+			return errors.New(`unary '-' must have a rhs that is an int or float`)
+		}
 		i := len(e.vals) - 1
 		switch e.vals[i].Type {
 		case nodeInt:
@@ -202,6 +178,9 @@ func (e *Rule) EvalOP(in Node, op Token) error {
 			return errors.New(`unary '-' not paired with int or float`)
 		}
 	case tokGT:
+		if len(e.vals) < 1 {
+			return errors.New(`'>' must have a rhs that is an int or float`)
+		}
 		i := len(e.vals) - 1
 		switch e.vals[i].Type {
 		case nodeInt:
@@ -226,6 +205,9 @@ func (e *Rule) EvalOP(in Node, op Token) error {
 			return errors.New(`'>' not paired with int or float`)
 		}
 	case tokLT:
+		if len(e.vals) < 1 {
+			return errors.New(`'<' must have a rhs that is an int or float`)
+		}
 		i := len(e.vals) - 1
 		switch e.vals[i].Type {
 		case nodeInt:
@@ -250,6 +232,9 @@ func (e *Rule) EvalOP(in Node, op Token) error {
 			return errors.New(`'<' not paired with int or float`)
 		}
 	case tokGTE:
+		if len(e.vals) < 1 {
+			return errors.New(`'>=' must have a rhs that is an int or float`)
+		}
 		i := len(e.vals) - 1
 		switch e.vals[i].Type {
 		case nodeInt:
@@ -274,6 +259,9 @@ func (e *Rule) EvalOP(in Node, op Token) error {
 			return errors.New(`'>=' not paired with int or float`)
 		}
 	case tokLTE:
+		if len(e.vals) < 1 {
+			return errors.New(`'<=' must have a rhs that is an int or float`)
+		}
 		i := len(e.vals) - 1
 		switch e.vals[i].Type {
 		case nodeInt:
@@ -298,6 +286,9 @@ func (e *Rule) EvalOP(in Node, op Token) error {
 			return errors.New(`'<=' not paired with int or float`)
 		}
 	case tokPlus:
+		if len(e.vals) < 2 {
+			return errors.New(`'+' requires a lhs and rhs that is an string/int/float`)
+		}
 		l := len(e.vals) - 2
 		r := l + 1
 		switch e.vals[l].Type {
@@ -335,6 +326,9 @@ func (e *Rule) EvalOP(in Node, op Token) error {
 		}
 		e.vals = e.vals[:r]
 	case tokMinus:
+		if len(e.vals) < 2 {
+			return errors.New(`'-' requires a lhs and rhs that is an int or float`)
+		}
 		l := len(e.vals) - 2
 		r := l + 1
 		switch e.vals[l].Type {
@@ -361,6 +355,9 @@ func (e *Rule) EvalOP(in Node, op Token) error {
 		}
 		e.vals = e.vals[:r]
 	case tokMultiply:
+		if len(e.vals) < 2 {
+			return errors.New(`'*' requires a lhs that is an string/int/float, and a rhs that is an int/float`)
+		}
 		l := len(e.vals) - 2
 		r := l + 1
 		switch e.vals[l].Type {
@@ -394,6 +391,9 @@ func (e *Rule) EvalOP(in Node, op Token) error {
 		}
 		e.vals = e.vals[:r]
 	case tokDivide:
+		if len(e.vals) < 2 {
+			return errors.New(`'/' requires a lhs and rhs that is an int or float`)
+		}
 		l := len(e.vals) - 2
 		r := l + 1
 		switch e.vals[l].Type {
@@ -420,6 +420,9 @@ func (e *Rule) EvalOP(in Node, op Token) error {
 		}
 		e.vals = e.vals[:r]
 	case tokBang:
+		if len(e.vals) < 1 {
+			return errors.New(`'!' requires a rhs that is a string/bool/int/float`)
+		}
 		i := len(e.vals) - 1
 		switch e.vals[i].Type {
 		case nodeText:
@@ -451,16 +454,20 @@ func (e *Rule) EvalOP(in Node, op Token) error {
 			}
 		}
 	case tokAND:
+		if len(e.vals) < 2 {
+			return errors.New(`'&' requires a lhs and rhs that is a string/bool/int/float`)
+		}
 		l := len(e.vals) - 2
 		r := l + 1
-
-		e.vals[l] = Node{Type: nodeBool, Bool: e.EvalNode(in, e.vals[l]) && e.EvalNode(in, e.vals[r])}
+		e.vals[l] = Node{Type: nodeBool, Bool: EvalNode(in, e.vals[l]) && EvalNode(in, e.vals[r])}
 		e.vals = e.vals[:r]
 	case tokOR:
+		if len(e.vals) < 2 {
+			return errors.New(`'|' requires a lhs and rhs that is a string/bool/int/float`)
+		}
 		l := len(e.vals) - 2
 		r := l + 1
-
-		e.vals[l] = Node{Type: nodeBool, Bool: e.EvalNode(in, e.vals[l]) || e.EvalNode(in, e.vals[r])}
+		e.vals[l] = Node{Type: nodeBool, Bool: EvalNode(in, e.vals[l]) || EvalNode(in, e.vals[r])}
 		e.vals = e.vals[:r]
 	}
 

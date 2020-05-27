@@ -63,3 +63,30 @@ func Decode(val string) (Node, error) {
 	}
 	return n, nil
 }
+
+func EvalNode(a, b Node) bool {
+	switch b.Type {
+	case nodeInt:
+		switch a.Type {
+		case nodeInt:
+			return a.Int == b.Int
+		case nodeFloat:
+			return a.Float == float64(b.Int)
+		default:
+			return false
+		}
+	case nodeFloat:
+		switch a.Type {
+		case nodeFloat:
+			return a.Float == b.Float
+		case nodeInt:
+			return float64(a.Int) == b.Float
+		default:
+			return false
+		}
+	case nodeText:
+		return a.Type == nodeText && a.Text == b.Text
+	default:
+		return b.Bool
+	}
+}
