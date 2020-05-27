@@ -14,6 +14,12 @@ func TestRule(t *testing.T) {
 		{in: "hello world", rule: `123 | "hello " + "world"`, pass: true},
 		{in: "100", rule: `>=100 & <=100`, pass: true},
 		{in: "100", rule: `>100`, pass: false},
+		{in: "50", rule: ">=100/2 & <100", pass: true},
+		{in: "49", rule: ">=100/2 & <100", pass: false},
+		{in: "7", rule: "<(1+2)*3", pass: true},
+		{in: "7", rule: "<1+2*3", pass: false},
+		{in: "8", rule: "<(1+2)*3", pass: true},
+		{in: "9", rule: "<(1+2)*3", pass: false},
 	}
 
 	for _, test := range cases {
@@ -21,12 +27,12 @@ func TestRule(t *testing.T) {
 
 		pass, err := px.Eval(test.in)
 		require.NoError(t, err)
-		require.EqualValues(t, pass, test.pass)
+		require.EqualValues(t, pass, test.pass, test)
 	}
 }
 
 func BenchmarkRule(b *testing.B) {
-	px := NewRule(`123 +456 |  "hello " + "world"`)
+	px := NewRule(`123 +456 |  "hello "`)
 
 	b.ReportAllocs()
 	b.ResetTimer()

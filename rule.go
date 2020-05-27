@@ -3,7 +3,6 @@ package boat
 import (
 	"errors"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	"strconv"
 	"strings"
 )
@@ -12,15 +11,19 @@ var Rules = [...]struct {
 	prec int  // precedence
 	rtl  bool // right-associative?
 }{
-	tokNegate: {prec: 4, rtl: true},
-	tokBang:   {prec: 4, rtl: true},
-	tokGT:     {prec: 4, rtl: true},
-	tokGTE:    {prec: 4, rtl: true},
-	tokLT:     {prec: 4, rtl: true},
-	tokLTE:    {prec: 4, rtl: true},
+	tokNegate: {prec: 6, rtl: true},
 
-	tokPlus:  {prec: 3},
-	tokMinus: {prec: 3},
+	tokMultiply: {prec: 5},
+	tokDivide:   {prec: 5},
+
+	tokPlus:  {prec: 4},
+	tokMinus: {prec: 4},
+
+	tokBang: {prec: 3, rtl: true},
+	tokGT:   {prec: 3, rtl: true},
+	tokGTE:  {prec: 3, rtl: true},
+	tokLT:   {prec: 3, rtl: true},
+	tokLTE:  {prec: 3, rtl: true},
 
 	tokAND: {prec: 2},
 	tokOR:  {prec: 1},
@@ -71,8 +74,21 @@ func (e *Rule) Eval(input string) (bool, error) {
 		case tokText:
 			e.vals = append(e.vals, Node{Type: nodeText, Text: c.repr(e.rule)})
 		case tokBracketStart:
-			e.ops = append(e.ops, c) // TODO(kenta): handle bracket start and close
-		case tokGT, tokGTE, tokLT, tokLTE, tokBang, tokAND, tokOR, tokPlus, tokMinus:
+			e.ops = append(e.ops, c)
+		case tokBracketEnd:
+			for len(e.ops) > 0 {
+				op := e.ops[len(e.ops)-1]
+				e.ops = e.ops[:len(e.ops)-1]
+
+				if op.Type == tokBracketStart {
+					break
+				}
+
+				if err := e.EvalOP(in, op); err != nil {
+					return false, fmt.Errorf("error while evaluating op in brackets: %w", err)
+				}
+			}
+		case tokGT, tokGTE, tokLT, tokLTE, tokBang, tokAND, tokOR, tokPlus, tokMinus, tokMultiply, tokDivide:
 			if c.Type == tokMinus {
 				if i == 0 {
 					c.Type = tokNegate
@@ -87,10 +103,14 @@ func (e *Rule) Eval(input string) (bool, error) {
 			for len(e.ops) > 0 {
 				op := e.ops[len(e.ops)-1]
 
+				if op.Type == tokBracketStart {
+					break
+				}
+
 				o1 := Rules[c.Type]
 				o2 := Rules[op.Type]
 
-				if op.Type == tokBracketStart || o1.prec > o2.prec || o1.prec == o2.prec && o1.rtl {
+				if o1.prec > o2.prec || o1.prec == o2.prec && o1.rtl {
 					break
 				}
 
@@ -117,9 +137,9 @@ func (e *Rule) Eval(input string) (bool, error) {
 		}
 	}
 
-	if len(e.vals) > 1 {
-		spew.Dump(e.vals) // TODO(kenta): handle case when multiple values exist
-	}
+	//if len(e.vals) > 1 {
+	//	spew.Dump(e.vals) // TODO(kenta): handle case when multiple values exist
+	//}
 
 	return e.vals[0].Bool, nil
 }
@@ -152,7 +172,7 @@ func (e *Rule) EvalNode(in, n Node) bool {
 }
 
 func (e *Rule) EvalOP(in Node, op Token) error {
-	//fmt.Printf("EVAL %q\n", op.repr(m.in))
+	//fmt.Printf("EVAL %q\n", op.repr(e.rule))
 
 	switch op.Type {
 	case tokNegate:
@@ -322,6 +342,65 @@ func (e *Rule) EvalOP(in Node, op Token) error {
 			}
 		default:
 			return errors.New(`lhs and rhs for '-' must be int or float`)
+		}
+		e.vals = e.vals[:r]
+	case tokMultiply:
+		l := len(e.vals) - 2
+		r := l + 1
+		switch e.vals[l].Type {
+		case nodeInt:
+			switch e.vals[r].Type {
+			case nodeInt:
+				e.vals[l] = Node{Type: nodeInt, Int: e.vals[l].Int * e.vals[r].Int}
+			case nodeFloat:
+				e.vals[l] = Node{Type: nodeFloat, Float: float64(e.vals[l].Int) * e.vals[r].Float}
+			default:
+				return errors.New(`lhs is int, rhs for '*' must be an int or float`)
+			}
+		case nodeFloat:
+			switch e.vals[r].Type {
+			case nodeInt:
+				e.vals[l] = Node{Type: nodeFloat, Float: e.vals[l].Float * float64(e.vals[r].Int)}
+			case nodeFloat:
+				e.vals[l] = Node{Type: nodeFloat, Float: e.vals[l].Float * e.vals[r].Float}
+			default:
+				return errors.New(`lhs is float, rhs for '*' must be an int or float`)
+			}
+		case nodeText:
+			switch e.vals[r].Type {
+			case nodeInt:
+				e.vals[l] = Node{Type: nodeText, Text: strings.Repeat(e.vals[l].Text, int(e.vals[r].Int))}
+			default:
+				return errors.New(`lhs is string, rhs for '*' must be an int`)
+			}
+		default:
+			return errors.New(`lhs and rhs for '*' must be int or float or string`)
+		}
+		e.vals = e.vals[:r]
+	case tokDivide:
+		l := len(e.vals) - 2
+		r := l + 1
+		switch e.vals[l].Type {
+		case nodeInt:
+			switch e.vals[r].Type {
+			case nodeInt:
+				e.vals[l] = Node{Type: nodeInt, Int: e.vals[l].Int / e.vals[r].Int}
+			case nodeFloat:
+				e.vals[l] = Node{Type: nodeFloat, Float: float64(e.vals[l].Int) / e.vals[r].Float}
+			default:
+				return errors.New(`lhs is int, rhs for '/' must be an int or float`)
+			}
+		case nodeFloat:
+			switch e.vals[r].Type {
+			case nodeInt:
+				e.vals[l] = Node{Type: nodeFloat, Float: e.vals[l].Float / float64(e.vals[r].Int)}
+			case nodeFloat:
+				e.vals[l] = Node{Type: nodeFloat, Float: e.vals[l].Float / e.vals[r].Float}
+			default:
+				return errors.New(`lhs is float, rhs for '/' must be an int or float`)
+			}
+		default:
+			return errors.New(`lhs and rhs for '/' must be int or float`)
 		}
 		e.vals = e.vals[:r]
 	case tokBang:

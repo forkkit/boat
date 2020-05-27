@@ -16,6 +16,8 @@ const (
 
 	tokPlus
 	tokMinus
+	tokMultiply
+	tokDivide
 	tokNegate
 	tokText
 	tokInt
@@ -35,6 +37,8 @@ var tokStr = [...]string{
 	tokOR:           "|",
 	tokPlus:         "+",
 	tokMinus:        "-",
+	tokMultiply:     "*",
+	tokDivide:       "/",
 	tokNegate:       "-",
 	tokText:         "text",
 	tokInt:          "int",

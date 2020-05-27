@@ -79,6 +79,10 @@ func (m *Machine) Lex() Token {
 		return Token{Type: tokPlus, Start: m.bc - 1, End: m.bc}
 	case '-':
 		return Token{Type: tokMinus, Start: m.bc - 1, End: m.bc}
+	case '*':
+		return Token{Type: tokMultiply, Start: m.bc - 1, End: m.bc}
+	case '/':
+		return Token{Type: tokDivide, Start: m.bc - 1, End: m.bc}
 	case '(':
 		return Token{Type: tokBracketStart, Start: m.bc - 1, End: m.bc}
 	case ')':
@@ -88,7 +92,7 @@ func (m *Machine) Lex() Token {
 	case '|':
 		return Token{Type: tokOR, Start: m.bc - 1, End: m.bc}
 	}
-	panic(fmt.Sprintf("unknown rune %q", string(r)))
+	panic(fmt.Sprintf("unknown rune %c", r))
 }
 
 func (m *Machine) LexNumber(r rune) (float bool) {
@@ -170,10 +174,10 @@ func (m *Machine) LexNumber(r rune) (float bool) {
 
 	if e == 'e' || e == 'p' {
 		if e == 'e' && prefix != eof && prefix != '0' {
-			panic(fmt.Sprintf("%q exponent requires decimal mantissa", r))
+			panic(`'e' exponent requires decimal mantissa`)
 		}
 		if e == 'p' && prefix != 'x' {
-			panic(fmt.Sprintf("%q exponent requires hexadecimal mantissa", r))
+			panic(`'p' exponent requires hexadecimal mantissa`)
 		}
 
 		r = m.Advance()
