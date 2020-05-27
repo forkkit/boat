@@ -20,6 +20,10 @@ func TestRule(t *testing.T) {
 		{in: "7", rule: "<1+2*3", pass: false},
 		{in: "8", rule: "<(1+2)*3", pass: true},
 		{in: "9", rule: "<(1+2)*3", pass: false},
+		{in: "1", rule: "!(>=1 & <=400 | >=500 & <=600)", pass: false},
+		{in: "0", rule: "!(>=1 & <=400 | >=500 & <=600)", pass: true},
+		{in: "hehe", rule: `"he" * 3`, pass: false},
+		{in: "hehehe", rule: `"he" * 3`, pass: true},
 	}
 
 	for _, test := range cases {

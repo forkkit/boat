@@ -137,11 +137,11 @@ func (e *Rule) Eval(input string) (bool, error) {
 		}
 	}
 
-	//if len(e.vals) > 1 {
-	//	spew.Dump(e.vals) // TODO(kenta): handle case when multiple values exist
-	//}
+	if len(e.vals) != 1 {
+		return false, fmt.Errorf("got %d values from evaluating the rule: expected only one", len(e.vals))
+	}
 
-	return e.vals[0].Bool, nil
+	return e.EvalNode(in, e.vals[0]), nil
 }
 
 func (e *Rule) EvalNode(in, n Node) bool {
