@@ -1,7 +1,6 @@
 package boat
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -39,10 +38,7 @@ type Node struct {
 func Decode(val string) (Node, error) {
 	var n Node
 
-	r, size := utf8.DecodeRuneInString(val)
-	if r == utf8.RuneError && size == 1 {
-		return n, errors.New("input comprised of invalid runes")
-	}
+	r, _ := utf8.DecodeRuneInString(val)
 
 	switch {
 	case r == '.' || r == '-' || isDecimalRune(r):

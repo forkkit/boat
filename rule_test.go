@@ -37,6 +37,7 @@ func TestRules(t *testing.T) {
 		{in: "hehe", rule: `"he" * 3`, pass: false},
 		{in: "hehehe", rule: `"he" * 3`, pass: true},
 		{in: "hello\nworld\test", rule: `"hello\nworld\test"`, pass: true},
+		{in: "\377 test \u2847 \xff", rule: `"\377 test \u2847 \xff"`, pass: true},
 	}
 
 	for _, test := range cases {
