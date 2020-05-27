@@ -14,7 +14,6 @@ const (
 	tokBang
 	tokAND
 	tokOR
-
 	tokPlus
 	tokMinus
 	tokMultiply
