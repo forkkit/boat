@@ -8,7 +8,7 @@ import (
 	"unsafe"
 )
 
-var Rules = [...]struct {
+var Ops = [...]struct {
 	prec int  // precedence
 	rtl  bool // right-associative?
 }{
@@ -31,25 +31,32 @@ var Rules = [...]struct {
 }
 
 type Rule struct {
-	rule   string  // rule
-	tokens []Token //tokens
-	ops    []Token // stack of ops
-	vals   []Node  // stack of vals
+	rule string  // rule
+	buf  []Token // tokens
+	ops  []Token // stack of ops
+	vals []Node  // stack of vals
 }
 
-func ParseRuleBytes(buf []byte) Rule {
+func ParseRuleBytes(buf []byte) (Rule, error) {
 	return ParseRule(*(*string)(unsafe.Pointer(&buf)))
 }
 
-func ParseRule(rule string) Rule {
+func ParseRule(rule string) (Rule, error) {
 	r := Rule{rule: rule, ops: make([]Token, 0, 16), vals: make([]Node, 0, 16)}
 
 	m := NewMachine(rule)
-	for tok := m.Lex(); tok.Type != tokEOF; tok = m.Lex() {
-		r.tokens = append(r.tokens, tok)
+
+	tok := m.Next()
+	for tok.Type != tokEOF && tok.Type != tokError {
+		r.buf = append(r.buf, tok)
+		tok = m.Next()
 	}
 
-	return r
+	if tok.Type == tokError {
+		return r, fmt.Errorf("%d:%d error parsing rule: %s", tok.Start, tok.End, m.err)
+	}
+
+	return r, nil
 }
 
 func (e *Rule) Eval(input string) (bool, error) {
@@ -61,8 +68,8 @@ func (e *Rule) Eval(input string) (bool, error) {
 	e.ops = e.ops[:0]
 	e.vals = e.vals[:0]
 
-	for i := 0; i < len(e.tokens); i++ {
-		c := e.tokens[i]
+	for i := 0; i < len(e.buf); i++ {
+		c := e.buf[i]
 		switch c.Type {
 		case tokInt:
 			val, err := strconv.ParseInt(c.repr(e.rule), 0, 64)
@@ -90,7 +97,7 @@ func (e *Rule) Eval(input string) (bool, error) {
 				}
 
 				if err := e.EvalOP(in, op); err != nil {
-					return false, fmt.Errorf("error while evaluating op in brackets: %w", err)
+					return false, fmt.Errorf("error while evaluating op input brackets: %w", err)
 				}
 			}
 		case tokGT, tokGTE, tokLT, tokLTE, tokBang, tokAND, tokOR, tokPlus, tokMinus, tokMultiply, tokDivide:
@@ -98,7 +105,7 @@ func (e *Rule) Eval(input string) (bool, error) {
 				if i == 0 {
 					c.Type = tokNegate
 				} else {
-					l := e.tokens[i-1]
+					l := e.buf[i-1]
 					if l.Type != tokInt && l.Type != tokFloat && l.Type != tokText {
 						c.Type = tokNegate
 					}
@@ -112,8 +119,8 @@ func (e *Rule) Eval(input string) (bool, error) {
 					break
 				}
 
-				o1 := Rules[c.Type]
-				o2 := Rules[op.Type]
+				o1 := Ops[c.Type]
+				o2 := Ops[op.Type]
 
 				if o1.prec > o2.prec || o1.prec == o2.prec && o1.rtl {
 					break

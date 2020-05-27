@@ -5,7 +5,19 @@ import (
 	"testing"
 )
 
-func TestRule(t *testing.T) {
+func TestInvalidRules(t *testing.T) {
+	cases := []string{
+		`"hello world`,
+		`0xfg`,
+	}
+
+	for _, test := range cases {
+		_, err := ParseRule(test)
+		require.Error(t, err, test)
+	}
+}
+
+func TestRules(t *testing.T) {
 	cases := []struct {
 		in   string
 		rule string
@@ -27,13 +39,15 @@ func TestRule(t *testing.T) {
 	}
 
 	for _, test := range cases {
-		px := ParseRule(test.rule)
+		px, err := ParseRule(test.rule)
+		require.NoError(t, err)
 
 		pass, err := px.Eval(test.in)
 		require.NoError(t, err)
 		require.EqualValues(t, pass, test.pass, test)
 
-		px = ParseRuleBytes([]byte(test.rule))
+		px, err = ParseRuleBytes([]byte(test.rule))
+		require.NoError(t, err)
 
 		pass, err = px.Eval(test.in)
 		require.NoError(t, err)
@@ -42,7 +56,8 @@ func TestRule(t *testing.T) {
 }
 
 func BenchmarkRule(b *testing.B) {
-	px := ParseRule(`123 +456 |  "hello "`)
+	px, err := ParseRule(`123 +456 |  "hello "`)
+	require.NoError(b, err)
 
 	b.ReportAllocs()
 	b.ResetTimer()

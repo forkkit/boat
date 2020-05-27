@@ -5,7 +5,8 @@ const eof rune = 0
 type TokenType int
 
 const (
-	tokEOF TokenType = iota
+	tokError TokenType = iota
+	tokEOF
 	tokGT
 	tokGTE
 	tokLT

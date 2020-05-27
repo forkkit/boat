@@ -1,122 +1,150 @@
 package boat
 
 import (
-	"fmt"
 	"unicode/utf8"
 )
 
 type Machine struct {
-	in  string // input
-	bc  int    // byte count
-	cc  int    // char count
-	lcw int    // last char width
+	input string  // input
+	err   string  // error
+	buf   []Token // token buf
+	pos   int     // start pos (byte)
+	ptr   int     // end pos (byte)
+	cc    int     // end pos (char)
+	lcw   int     // last char width
 }
 
-func NewMachine(in string) Machine {
-	return Machine{in: in, lcw: -1}
+func NewMachine(input string) Machine {
+	return Machine{input: input, buf: make([]Token, 0, 16), lcw: -1}
 }
 
-func (m *Machine) Advance() rune {
-	if m.bc >= len(m.in) {
+func (m *Machine) next() rune {
+	if m.ptr >= len(m.input) {
+		if m.ptr > len(m.input) {
+			m.error("went too far ahead")
+			return eof
+		}
 		return eof
 	}
-	r, cw := utf8.DecodeRuneInString(m.in[m.bc:])
-	m.bc += cw
+	r, cw := utf8.DecodeRuneInString(m.input[m.ptr:])
+	m.ptr += cw
 	m.lcw = cw
 	m.cc++
 	return r
 }
 
-func (m *Machine) Backup() {
+func (m *Machine) backup() {
 	if m.lcw < 0 {
-		panic("went back too far")
+		m.error("went back too far")
 	}
-	m.bc -= m.lcw
+	m.ptr -= m.lcw
 	m.lcw = -1
 	m.cc--
 }
 
-func (m *Machine) Lex() Token {
-	r := m.Advance()
-	for isWhitespace(r) {
-		r = m.Advance()
-	}
-	if r == eof {
-		return Token{Type: tokEOF, Start: m.bc - 1, End: m.bc}
-	}
-
-	if isDecimalRune(r) || r == '.' {
-		s := m.bc - 1
-
-		if m.LexNumber(r) {
-			return Token{Type: tokFloat, Start: s, End: m.bc}
-		}
-		return Token{Type: tokInt, Start: s, End: m.bc}
-	}
-
-	switch r {
-	case '\'', '"':
-		return m.LexText(r)
-	case '>':
-		r = m.Advance()
-		if r == '=' {
-			return Token{Type: tokGTE, Start: m.bc - 2, End: m.bc}
-		} else {
-			m.Backup()
-			return Token{Type: tokGT, Start: m.bc - 1, End: m.bc}
-		}
-	case '<':
-		r = m.Advance()
-		if r == '=' {
-			return Token{Type: tokLTE, Start: m.bc - 2, End: m.bc}
-		} else {
-			m.Backup()
-			return Token{Type: tokLT, Start: m.bc - 1, End: m.bc}
-		}
-	case '!':
-		return Token{Type: tokBang, Start: m.bc - 1, End: m.bc}
-	case '+':
-		return Token{Type: tokPlus, Start: m.bc - 1, End: m.bc}
-	case '-':
-		return Token{Type: tokMinus, Start: m.bc - 1, End: m.bc}
-	case '*':
-		return Token{Type: tokMultiply, Start: m.bc - 1, End: m.bc}
-	case '/':
-		return Token{Type: tokDivide, Start: m.bc - 1, End: m.bc}
-	case '(':
-		return Token{Type: tokBracketStart, Start: m.bc - 1, End: m.bc}
-	case ')':
-		return Token{Type: tokBracketEnd, Start: m.bc - 1, End: m.bc}
-	case '&':
-		return Token{Type: tokAND, Start: m.bc - 1, End: m.bc}
-	case '|':
-		return Token{Type: tokOR, Start: m.bc - 1, End: m.bc}
-	}
-	panic(fmt.Sprintf("unknown rune %c", r))
+func (m *Machine) emit(typ TokenType) {
+	m.buf = append(m.buf, Token{Type: typ, Start: m.pos, End: m.ptr})
+	m.ignore()
 }
 
-func (m *Machine) LexNumber(r rune) (float bool) {
+func (m *Machine) error(err string) {
+	m.buf = append(m.buf, Token{Type: tokError, Start: m.pos, End: m.ptr})
+	m.err = err
+}
+
+func (m *Machine) ignore() {
+	m.pos = m.ptr
+}
+
+func (m *Machine) Next() Token {
+	for {
+		if len(m.buf) > 0 {
+			token := m.buf[0]
+			m.buf = m.buf[1:]
+			return token
+		}
+
+		r := m.next()
+		for isWhitespace(r) {
+			m.ignore()
+			r = m.next()
+		}
+
+		if r == eof {
+			m.emit(tokEOF)
+			continue
+		}
+
+		if isDecimalRune(r) || r == '.' {
+			m.lexNumber(r)
+			continue
+		}
+
+		switch r {
+		case '\'', '"':
+			m.lexEscapedText(r)
+		case '>':
+			r = m.next()
+			if r == '=' {
+				m.emit(tokGTE)
+			} else {
+				m.backup()
+				m.emit(tokGT)
+			}
+		case '<':
+			r = m.next()
+			if r == '=' {
+				m.emit(tokLTE)
+			} else {
+				m.backup()
+				m.emit(tokLT)
+			}
+		case '!':
+			m.emit(tokBang)
+		case '+':
+			m.emit(tokPlus)
+		case '-':
+			m.emit(tokMinus)
+		case '*':
+			m.emit(tokMultiply)
+		case '/':
+			m.emit(tokDivide)
+		case '(':
+			m.emit(tokBracketStart)
+		case ')':
+			m.emit(tokBracketEnd)
+		case '&':
+			m.emit(tokAND)
+		case '|':
+			m.emit(tokOR)
+		default:
+			m.error("unexpected rune")
+		}
+	}
+}
+
+func (m *Machine) lexNumber(r rune) {
 	var (
 		separator bool
 		digit     bool
 		prefix    rune
 	)
 
-	float = r == '.'
+	float := r == '.'
 
 	skip := func(pred func(rune) bool) {
 		for {
 			switch {
 			case r == '_':
 				separator = true
-				r = m.Advance()
+				r = m.next()
 				continue
 			case pred(r):
 				digit = true
-				r = m.Advance()
+				r = m.next()
 				continue
 			default:
-				m.Backup()
+				m.backup()
 			case r == eof:
 			}
 			break
@@ -124,17 +152,17 @@ func (m *Machine) LexNumber(r rune) (float bool) {
 	}
 
 	if r == '0' {
-		prefix = lower(m.Advance())
+		prefix = lower(m.next())
 
 		switch prefix {
 		case 'x':
-			r = m.Advance()
+			r = m.next()
 			skip(isHexRune)
 		case 'o':
-			r = m.Advance()
+			r = m.next()
 			skip(isOctalRune)
 		case 'b':
-			r = m.Advance()
+			r = m.next()
 			skip(isBinRune)
 		default:
 			prefix, digit = '0', true
@@ -150,11 +178,12 @@ func (m *Machine) LexNumber(r rune) (float bool) {
 
 	if float {
 		if prefix == 'o' || prefix == 'b' {
-			panic("invalid radix point")
+			m.error("invalid radix point")
+			return
 		}
 
-		r = lower(m.Advance())
-		r = lower(m.Advance())
+		r = lower(m.next())
+		r = lower(m.next())
 
 		switch prefix {
 		case 'x':
@@ -167,23 +196,26 @@ func (m *Machine) LexNumber(r rune) (float bool) {
 	}
 
 	if !digit {
-		panic("number has no digits")
+		m.error("number has no digits")
+		return
 	}
 
 	e := lower(r)
 
 	if e == 'e' || e == 'p' {
 		if e == 'e' && prefix != eof && prefix != '0' {
-			panic(`'e' exponent requires decimal mantissa`)
+			m.error(`'e' exponent requires decimal mantissa`)
+			return
 		}
 		if e == 'p' && prefix != 'x' {
-			panic(`'p' exponent requires hexadecimal mantissa`)
+			m.error(`'p' exponent requires hexadecimal mantissa`)
+			return
 		}
 
-		r = m.Advance()
-		r = m.Advance()
+		r = m.next()
+		r = m.next()
 		if r == '+' || r == '-' {
-			r = m.Advance()
+			r = m.next()
 		}
 
 		float = true
@@ -191,43 +223,54 @@ func (m *Machine) LexNumber(r rune) (float bool) {
 		skip(isDecimalRune)
 
 		if !digit {
-			panic("exponent has no digits")
+			m.error("exponent has no digits")
+			return
 		}
 	} else if float && prefix == 'x' {
-		panic("hexadecimal mantissa requires a 'p' exponent")
+		m.error("hexadecimal mantissa requires a 'p' exponent")
+		return
 	}
 
 	_ = separator
 
-	return float
+	if float {
+		m.emit(tokFloat)
+	} else {
+		m.emit(tokInt)
+	}
 }
 
-func (m *Machine) LexText(quote rune) Token {
-	start := m.bc
+func (m *Machine) lexEscapedText(quote rune) {
+	m.ignore()
 
-	for {
-		switch m.Advance() {
+	for len(m.buf) == 0 {
+		switch m.next() {
 		case quote:
-			return Token{Type: tokText, Start: start, End: m.bc - 1}
+			m.backup()
+			m.emit(tokText)
+			m.next()
+			m.ignore()
+			return
 		case '\\':
-			m.LexEscape(quote)
+			m.lexEscape(quote)
 			continue
 		case eof, '\n':
-			panic("unterminated")
+			m.error("unterminated string literal")
+			return
 		default:
 			continue
 		}
 	}
 }
 
-func (m *Machine) LexEscape(quote rune) {
-	r := m.Advance()
+func (m *Machine) lexEscape(quote rune) {
+	r := m.next()
 
 	skip := func(n int, pred func(rune) bool) {
 		for n > 0 {
-			r = m.Advance()
+			r = m.next()
 			if !pred(r) || r == eof {
-				panic("bad")
+				m.error("got invalid escape sequence literal")
 			}
 			n--
 		}
@@ -243,10 +286,10 @@ func (m *Machine) LexEscape(quote rune) {
 	case 'U':
 		skip(8, isHexRune)
 	case eof:
-		panic("got eof while parsing escape literal")
+		m.error("reached eof while parsing escape sequence literal")
 	default:
 		if !isOctalRune(r) || r == eof {
-			panic("bad 8")
+			m.error("got invalid escape sequence literal")
 		}
 		skip(2, isOctalRune)
 	}
