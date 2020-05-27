@@ -26,13 +26,13 @@ func TestRule(t *testing.T) {
 }
 
 func BenchmarkRule(b *testing.B) {
-	px := NewRule(`123 | "hello world"`)
+	px := NewRule(`123 +456 |  "hello " + "world"`)
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		pass, err := px.Eval(`hello world`)
+		pass, err := px.Eval(`579`)
 		if !pass || err != nil {
 			b.Fatal(err)
 		}

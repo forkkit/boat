@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"strconv"
+	"strings"
 )
 
 var Rules = [...]struct {
@@ -26,13 +27,21 @@ var Rules = [...]struct {
 }
 
 type Rule struct {
-	rule string  // rule
-	ops  []Token // stack of ops
-	vals []Node  // stack of vals
+	rule   string  // rule
+	tokens []Token //tokens
+	ops    []Token // stack of ops
+	vals   []Node  // stack of vals
 }
 
 func NewRule(rule string) Rule {
-	return Rule{rule: rule, ops: make([]Token, 0, 16), vals: make([]Node, 0, 16)}
+	r := Rule{rule: rule, ops: make([]Token, 0, 16), vals: make([]Node, 0, 16)}
+
+	m := NewMachine(rule)
+	for tok := m.Lex(); tok.Type != tokEOF; tok = m.Lex() {
+		r.tokens = append(r.tokens, tok)
+	}
+
+	return r
 }
 
 func (e *Rule) Eval(input string) (bool, error) {
@@ -44,32 +53,35 @@ func (e *Rule) Eval(input string) (bool, error) {
 	e.ops = e.ops[:0]
 	e.vals = e.vals[:0]
 
-	m := NewMachine(e.rule)
-
-	c := m.Lex()
-	l := c
-
-	for c.Type != tokEOF {
+	for i := 0; i < len(e.tokens); i++ {
+		c := e.tokens[i]
 		switch c.Type {
 		case tokInt:
-			val, err := strconv.ParseInt(c.repr(m.in), 0, 64)
+			val, err := strconv.ParseInt(c.repr(e.rule), 0, 64)
 			if err != nil {
 				return false, fmt.Errorf("failed to decode int: %w", err)
 			}
 			e.vals = append(e.vals, Node{Type: nodeInt, Int: val})
 		case tokFloat:
-			val, err := strconv.ParseFloat(c.repr(m.in), 64)
+			val, err := strconv.ParseFloat(c.repr(e.rule), 64)
 			if err != nil {
 				return false, fmt.Errorf("failed to decode float: %w", err)
 			}
 			e.vals = append(e.vals, Node{Type: nodeFloat, Float: val})
 		case tokText:
-			e.vals = append(e.vals, Node{Type: nodeText, Text: c.repr(m.in)})
+			e.vals = append(e.vals, Node{Type: nodeText, Text: c.repr(e.rule)})
 		case tokBracketStart:
 			e.ops = append(e.ops, c) // TODO(kenta): handle bracket start and close
 		case tokGT, tokGTE, tokLT, tokLTE, tokBang, tokAND, tokOR, tokPlus, tokMinus:
-			if c.Type == tokMinus && l.Type != tokInt && l.Type != tokFloat && l.Type != tokText {
-				c.Type = tokNegate
+			if c.Type == tokMinus {
+				if i == 0 {
+					c.Type = tokNegate
+				} else {
+					l := e.tokens[i-1]
+					if l.Type != tokInt && l.Type != tokFloat && l.Type != tokText {
+						c.Type = tokNegate
+					}
+				}
 			}
 
 			for len(e.ops) > 0 {
@@ -90,9 +102,6 @@ func (e *Rule) Eval(input string) (bool, error) {
 			}
 			e.ops = append(e.ops, c)
 		}
-
-		l = c
-		c = m.Lex()
 	}
 
 	for len(e.ops) > 0 {
@@ -254,7 +263,7 @@ func (e *Rule) EvalOP(in Node, op Token) error {
 		}
 	case tokPlus:
 		l := len(e.vals) - 2
-		r := len(e.vals) - 1
+		r := l + 1
 		switch e.vals[l].Type {
 		case nodeInt:
 			switch e.vals[r].Type {
@@ -277,7 +286,11 @@ func (e *Rule) EvalOP(in Node, op Token) error {
 		case nodeText:
 			switch e.vals[r].Type {
 			case nodeText:
-				e.vals[l] = Node{Type: nodeText, Text: e.vals[l].Text + e.vals[r].Text}
+				var b strings.Builder
+				b.Grow(len(e.vals[l].Text) + len(e.vals[r].Text))
+				b.WriteString(e.vals[l].Text)
+				b.WriteString(e.vals[r].Text)
+				e.vals[l] = Node{Type: nodeText, Text: b.String()}
 			default:
 				return errors.New(`lhs is string, rhs for '+' must be a string`)
 			}
@@ -287,7 +300,7 @@ func (e *Rule) EvalOP(in Node, op Token) error {
 		e.vals = e.vals[:r]
 	case tokMinus:
 		l := len(e.vals) - 2
-		r := len(e.vals) - 1
+		r := l + 1
 		switch e.vals[l].Type {
 		case nodeInt:
 			switch e.vals[r].Type {
@@ -344,13 +357,13 @@ func (e *Rule) EvalOP(in Node, op Token) error {
 		}
 	case tokAND:
 		l := len(e.vals) - 2
-		r := len(e.vals) - 1
+		r := l + 1
 
 		e.vals[l] = Node{Type: nodeBool, Bool: e.EvalNode(in, e.vals[l]) && e.EvalNode(in, e.vals[r])}
 		e.vals = e.vals[:r]
 	case tokOR:
 		l := len(e.vals) - 2
-		r := len(e.vals) - 1
+		r := l + 1
 
 		e.vals[l] = Node{Type: nodeBool, Bool: e.EvalNode(in, e.vals[l]) || e.EvalNode(in, e.vals[r])}
 		e.vals = e.vals[:r]

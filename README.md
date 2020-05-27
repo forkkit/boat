@@ -16,5 +16,5 @@ $ go test -bench=. -benchtime=10s
 goos: linux
 goarch: amd64
 pkg: github.com/lithdew/boat
-BenchmarkRule-8         34253203               309 ns/op               0 B/op          0 allocs/op
+BenchmarkRule-8         44794353               232 ns/op              16 B/op          1 allocs/op
 ```
