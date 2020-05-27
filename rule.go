@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unsafe"
 )
 
 var Rules = [...]struct {
@@ -36,7 +37,11 @@ type Rule struct {
 	vals   []Node  // stack of vals
 }
 
-func NewRule(rule string) Rule {
+func ParseRuleBytes(buf []byte) Rule {
+	return ParseRule(*(*string)(unsafe.Pointer(&buf)))
+}
+
+func ParseRule(rule string) Rule {
 	r := Rule{rule: rule, ops: make([]Token, 0, 16), vals: make([]Node, 0, 16)}
 
 	m := NewMachine(rule)

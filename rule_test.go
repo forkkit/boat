@@ -27,16 +27,22 @@ func TestRule(t *testing.T) {
 	}
 
 	for _, test := range cases {
-		px := NewRule(test.rule)
+		px := ParseRule(test.rule)
 
 		pass, err := px.Eval(test.in)
+		require.NoError(t, err)
+		require.EqualValues(t, pass, test.pass, test)
+
+		px = ParseRuleBytes([]byte(test.rule))
+
+		pass, err = px.Eval(test.in)
 		require.NoError(t, err)
 		require.EqualValues(t, pass, test.pass, test)
 	}
 }
 
 func BenchmarkRule(b *testing.B) {
-	px := NewRule(`123 +456 |  "hello "`)
+	px := ParseRule(`123 +456 |  "hello "`)
 
 	b.ReportAllocs()
 	b.ResetTimer()
