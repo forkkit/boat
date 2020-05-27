@@ -36,6 +36,7 @@ func TestRules(t *testing.T) {
 		{in: "0", rule: "!(>=1 & <=400 | >=500 & <=600)", pass: true},
 		{in: "hehe", rule: `"he" * 3`, pass: false},
 		{in: "hehehe", rule: `"he" * 3`, pass: true},
+		{in: "hello\nworld\test", rule: `"hello\nworld\test"`, pass: true},
 	}
 
 	for _, test := range cases {

@@ -84,7 +84,11 @@ func (e *Rule) Eval(input string) (bool, error) {
 			}
 			e.vals = append(e.vals, Node{Type: nodeFloat, Float: val})
 		case tokText:
-			e.vals = append(e.vals, Node{Type: nodeText, Text: c.repr(e.rule)})
+			val, err := unescape(c.repr(e.rule))
+			if err != nil {
+				return false, fmt.Errorf("failed to unescape string: %w", err)
+			}
+			e.vals = append(e.vals, Node{Type: nodeText, Text: val})
 		case tokBracketStart:
 			e.ops = append(e.ops, c)
 		case tokBracketEnd:
