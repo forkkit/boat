@@ -57,13 +57,7 @@ func (m *Machine) ignore() {
 }
 
 func (m *Machine) Next() Token {
-	for {
-		if len(m.buf) > 0 {
-			token := m.buf[0]
-			m.buf = m.buf[1:]
-			return token
-		}
-
+	for len(m.buf) == 0 {
 		r := m.next()
 
 		switch {
@@ -118,6 +112,11 @@ func (m *Machine) Next() Token {
 			}
 		}
 	}
+
+	token := m.buf[0]
+	m.buf = m.buf[1:]
+
+	return token
 }
 
 func (m *Machine) lexNumber(r rune) {
