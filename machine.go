@@ -42,6 +42,14 @@ func (m *Machine) backup() {
 	m.cc--
 }
 
+func (m *Machine) accept(r rune) bool {
+	if m.next() == r {
+		return true
+	}
+	m.backup()
+	return false
+}
+
 func (m *Machine) emit(typ TokenType) {
 	m.buf = append(m.buf, Token{Type: typ, Start: m.pos, End: m.ptr})
 	m.ignore()
@@ -74,19 +82,15 @@ func (m *Machine) Next() Token {
 			case '\'', '"':
 				m.lexEscapedText(r)
 			case '>':
-				r = m.next()
-				if r == '=' {
+				if m.accept('=') {
 					m.emit(tokGTE)
 				} else {
-					m.backup()
 					m.emit(tokGT)
 				}
 			case '<':
-				r = m.next()
-				if r == '=' {
+				if m.accept('=') {
 					m.emit(tokLTE)
 				} else {
-					m.backup()
 					m.emit(tokLT)
 				}
 			case '!':
