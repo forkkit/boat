@@ -65,60 +65,57 @@ func (m *Machine) Next() Token {
 		}
 
 		r := m.next()
-		for isWhitespace(r) {
+
+		switch {
+		case isWhitespace(r):
 			m.ignore()
-			r = m.next()
-		}
-
-		if r == eof {
-			m.emit(tokEOF)
-			continue
-		}
-
-		if isDecimalRune(r) || r == '.' {
+		case isDecimalRune(r):
 			m.lexNumber(r)
-			continue
-		}
-
-		switch r {
-		case '\'', '"':
-			m.lexEscapedText(r)
-		case '>':
-			r = m.next()
-			if r == '=' {
-				m.emit(tokGTE)
-			} else {
-				m.backup()
-				m.emit(tokGT)
-			}
-		case '<':
-			r = m.next()
-			if r == '=' {
-				m.emit(tokLTE)
-			} else {
-				m.backup()
-				m.emit(tokLT)
-			}
-		case '!':
-			m.emit(tokBang)
-		case '+':
-			m.emit(tokPlus)
-		case '-':
-			m.emit(tokMinus)
-		case '*':
-			m.emit(tokMultiply)
-		case '/':
-			m.emit(tokDivide)
-		case '(':
-			m.emit(tokBracketStart)
-		case ')':
-			m.emit(tokBracketEnd)
-		case '&':
-			m.emit(tokAND)
-		case '|':
-			m.emit(tokOR)
 		default:
-			m.error("unexpected rune")
+			switch r {
+			case eof:
+				m.emit(tokEOF)
+			case '.':
+				m.lexNumber(r)
+			case '\'', '"':
+				m.lexEscapedText(r)
+			case '>':
+				r = m.next()
+				if r == '=' {
+					m.emit(tokGTE)
+				} else {
+					m.backup()
+					m.emit(tokGT)
+				}
+			case '<':
+				r = m.next()
+				if r == '=' {
+					m.emit(tokLTE)
+				} else {
+					m.backup()
+					m.emit(tokLT)
+				}
+			case '!':
+				m.emit(tokBang)
+			case '+':
+				m.emit(tokPlus)
+			case '-':
+				m.emit(tokMinus)
+			case '*':
+				m.emit(tokMultiply)
+			case '/':
+				m.emit(tokDivide)
+			case '(':
+				m.emit(tokBracketStart)
+			case ')':
+				m.emit(tokBracketEnd)
+			case '&':
+				m.emit(tokAND)
+			case '|':
+				m.emit(tokOR)
+			default:
+				m.error("unexpected rune")
+			}
 		}
 	}
 }
